@@ -1,6 +1,8 @@
 package com.xiyunmn.hook.bdtb;
+
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import androidx.annotation.NonNull;
 
 import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
@@ -34,6 +36,103 @@ public class MainHook extends XposedModule {
             "  style.innerHTML = [\n" +
             "    /* 1. 成为贴吧会员横幅 */\n" +
             "    '.vip-box { display: none !important; }',\n" +
+            "    /* 2. 每日签到面板（埋点精准匹配） */\n" +
+            "    '.main-container[data-track*=\"checkinTask\"] { display: none !important; }',\n" +
+            "    /* 3. 限时活动任务（如去美团刷视频） */\n" +
+            "    '.exchange-task-wrapper { display: none !important; }',\n" +
+            "    /* 4. 游戏中心完整卡片 */\n" +
+            "    '.normal-box.no-foot-btn-mb { display: none !important; }',\n" +
+            "    /* 5. 度小满钱包等推广小项（埋点精准匹配） */\n" +
+            "    '.nor-util-item[data-track*=\"度小满\"] { display: none !important; }'\n" +
+            "  ].join('\\n');\n" +
+            "\n" +
+            "  var inject = function() {\n" +
+            "    var head = document.head || document.getElementsByTagName('head')[0]\n" +
+            "              || document.documentElement;\n" +
+            "    head.appendChild(style);\n" +
+            "  };\n" +
+            "\n" +
+            "  if (document.readyState === 'loading') {\n" +
+            "    document.addEventListener('DOMContentLoaded', inject);\n" +
+            "    inject(); // 兜底\n" +
+            "  } else {\n" +
+            "    inject();\n" +
+            "  }\n" +
+            "})();";
+    // ─────────────────────────────────────────────────────────────────────
+
+    public MainHook(XposedInterface base, ModuleLoadedParam param) {
+        super(base, param);
+    }
+
+    @Override
+    public void onPackageLoaded(@NonNull PackageLoadedParam param) {
+        if (!TARGET_PKG.equals(param.getPackageName())) return;
+        if (!param.isFirstPackage()) return;
+
+        try {
+            ClassLoader cl = param.getClassLoader();
+
+            // ── 钩子 1：BaseWebView.loadUrl(String) ──
+            Class<?> baseWebViewCls = cl.loadClass(
+                    "com.baidu.tieba.browser.core.webview.base.BaseWebView");
+            Method loadUrl = baseWebViewCls.getMethod("loadUrl", String.class);
+            hook(loadUrl, LoadUrlHooker.class);
+
+            // ── 钩子 2：WebViewClient.onPageFinished(WebView, String) ──
+            Method onPageFinished = WebViewClient.class.getMethod(
+                    "onPageFinished", WebView.class, String.class);
+            hook(onPageFinished, OnPageFinishedHooker.class);
+
+            log("[TiebaPurify] Hooks installed successfully.");
+
+        } catch (Exception e) {
+            log("[TiebaPurify] Hook setup failed: " + e);
+        }
+    }
+
+    // ═══════════════════════════ Hooker 1 ═══════════════════════════════
+    @XposedHooker
+    static class LoadUrlHooker implements XposedInterface.Hooker {
+        @BeforeInvocation
+        static void before(XposedInterface.BeforeHookCallback cb) {
+            Object rawUrl = cb.getArgs()[0];
+            if (!(rawUrl instanceof String)) return;
+
+            String url = (String) rawUrl;
+            if (!url.contains(SIDEBAR_URL_KEYWORD)) return;
+
+            Object thisObj = cb.getThisObject();
+            if (!(thisObj instanceof WebView)) return;
+
+            WebView wv = (WebView) thisObj;
+            synchronized (sSidebarWebViews) {
+                sSidebarWebViews.add(wv);
+            }
+        }
+    }
+
+    // ═══════════════════════════ Hooker 2 ═══════════════════════════════
+    @XposedHooker
+    static class OnPageFinishedHooker implements XposedInterface.Hooker {
+        @AfterInvocation
+        static void after(XposedInterface.AfterHookCallback cb) {
+            Object[] args = cb.getArgs();
+            if (!(args[0] instanceof WebView)) return;
+
+            WebView wv   = (WebView) args[0];
+            String  url  = (args[1] instanceof String) ? (String) args[1] : "";
+
+            boolean isSidebar;
+            synchronized (sSidebarWebViews) {
+                isSidebar = sSidebarWebViews.contains(wv);
+            }
+            if (!isSidebar || !url.contains(SIDEBAR_URL_KEYWORD)) return;
+
+            wv.post(() -> wv.evaluateJavascript(JS_PURIFY, null));
+        }
+    }
+}
             "    /* 2. 每日签到面板（埋点精准匹配） */\n" +
             "    '.main-container[data-track*=\"checkinTask\"] { display: none !important; }',\n" +
             "    /* 3. 限时活动任务（如去美团刷视频） */\n" +
