@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace 'com.example.module'
+    namespace 'com.xiyunmn.hook.bdtb'
     compileSdk 34 // 可以根据需要修改
 
     defaultConfig {
-        applicationId "com.example.module"
+        applicationId "com.xiyunmn.hook.bdtb"
         minSdkVersion 31
         targetSdkVersion 34
         versionCode 1
