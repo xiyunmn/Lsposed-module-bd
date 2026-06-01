@@ -51,6 +51,43 @@ jobs:
           keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
           keyPassword: ${{ secrets.KEY_PASSWORD }}
 
+      # 7. Debug 输出签名文件（使用单引号防止 YAML 解析问题）
+      - name: Debug signed APK
+        run: echo 'Signed file: ${{ steps.sign.outputs.signedReleaseFiles }}'
+
+      # 8. 发布到 GitHub Releases（仅 tag 触发时）
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.sign.outputs.signedReleaseFiles }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 9. 上传 Artifact
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bdtb-purify-${{ github.sha }}
+          path: ${{ steps.sign.outputs.signedReleaseFiles }}
+          retention-days: 7        run: chmod +x gradlew
+
+      # 5. 构建 Release APK
+      - name: Build Release APK
+        run: ./gradlew assembleRelease
+
+      # 6. 对齐 + 签名
+      - name: Sign APK
+        uses: r0adkll/sign-android-release@v1
+        id: sign
+        with:
+          releaseDirectory: app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+
       # 7. Debug 输出签名文件（可选）
       - name: Debug signed APK
         run: echo "Signed file: ${{ steps.sign.outputs.signedReleaseFiles }}"
