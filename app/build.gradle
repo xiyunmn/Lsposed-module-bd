@@ -35,6 +35,6 @@ android {
 
 dependencies {
     compileOnly 'androidx.annotation:annotation:1.9.1'
-    compileOnly 'io.github.libxposed:api:100' // 请参考 libxposed 文档查看最新版本
-    compileOnly project(":libxposed-compat")
+    compileOnly 'io.github.libxposed:api:101' // API 101
+    // compat 层仅供 legacy/API100 桥接使用，纯 API101 模块不需要
 }
